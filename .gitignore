@@ -1,0 +1,17 @@
+# Python bytecode & cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Data & Models (Ignore large local files)
+data/
+checkpoints/
+*.pth
+*.tar
+*.gz
+
+# Logs & IDEs
+*.log
+.vscode/
+.idea/
+.DS_Store
