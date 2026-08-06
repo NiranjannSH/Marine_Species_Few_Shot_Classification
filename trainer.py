@@ -9,12 +9,13 @@ from torch.utils.data import DataLoader
 from config import (
     SEED, CHECKPOINT_DIR, IMAGE_SIZE, S1_BATCH_SIZE, S1_EPOCHS, 
     S1_LR, S1_WEIGHT_DECAY, S1_TEMPERATURE, K_SHOTS, N_QUERY, 
-    ADAPT_STEPS, ADAPT_LR, ADAPT_BACKBONE, FINAL_TEST_EPISODES, SAVE_STAGE_2_MODELS
+    ADAPT_STEPS, ADAPT_LR, ADAPT_BACKBONE, FINAL_TEST_EPISODES, SAVE_STAGE_2_MODELS,
+    DATASETS_CONFIG
 )
 from dataset import train_transform, SupConDataset, FewShotDataset
 from models import SupConModel, ResNet18Encoder, CosineClassifier, SupConLoss
 from utils import (
-    set_seed, seed_worker, log_to_file, compute_model_macs, 
+    set_seed, seed_worker, compute_model_macs, 
     freeze_batchnorm_stats, mean_confidence_interval
 )
 
@@ -25,24 +26,45 @@ def execute_dataset_pipeline(config, gpu_id):
     else:
         device = torch.device("cpu")
 
-    process_seed = SEED + (gpu_id if gpu_id else 0)
+    # Decouple process_seed from dynamic GPU queue assignment
+    dataset_names = [c["name"] for c in DATASETS_CONFIG]
+    dataset_idx = dataset_names.index(config["name"])
+    process_seed = SEED + (dataset_idx * 1000)
+
     set_seed(process_seed)
+
+    # Setup Dataset-Specific Folders: checkpoints/<dataset_name>/logs/
+    dataset_dir = os.path.join(CHECKPOINT_DIR, config["name"])
+    logs_dir = os.path.join(dataset_dir, "logs")
+    os.makedirs(logs_dir, exist_ok=True)
+
+    timestamp = time.strftime("%Y-%m-%d_%H-%M-%S")
+    log_file_path = os.path.join(logs_dir, f"{config['name']}_execution_log_{timestamp}.txt")
+    table_file_path = os.path.join(logs_dir, f"{config['name']}_paper_table_{timestamp}.txt")
+
+    # Local logger writing strictly to dataset's own log file
+    def log_msg(message):
+        current_ts = time.strftime("%Y-%m-%d %H:%M:%S")
+        formatted = f"[{current_ts}] {message}"
+        with open(log_file_path, "a", encoding="utf-8") as f:
+            f.write(formatted + "\n")
+        print(formatted, flush=True)
 
     dataset = FewShotDataset(config, split_seed=SEED, sampler_seed=process_seed)
 
     if device.type == "cuda":
         torch.cuda.reset_peak_memory_stats(device)
 
-    log_to_file(f"[{config['name']}] Train Classes: {dataset.train_classes}")
-    log_to_file(f"[{config['name']}] Val Classes:   {dataset.val_classes}")
-    log_to_file(f"[{config['name']}] Test Classes:  {dataset.test_classes}")
+    log_msg(f"[{config['name']}] Train Classes: {dataset.train_classes}")
+    log_msg(f"[{config['name']}] Val Classes:   {dataset.val_classes}")
+    log_msg(f"[{config['name']}] Test Classes:  {dataset.test_classes}")
 
     # STAGE 1: CONTRASTIVE PRE-TRAINING
-    log_to_file(f"[{config['name']}] Starting Stage 1 Contrastive Pre-Training.")
+    log_msg(f"[{config['name']}] Starting Stage 1 Contrastive Pre-Training.")
     s1_dataset = SupConDataset(config["root"], dataset.train_classes, train_transform)
 
     if len(s1_dataset) == 0:
-        log_to_file(f"[ERROR] [{config['name']}] Has 0 samples at path: {config['root']}. Please verify your data location!")
+        log_msg(f"[ERROR] [{config['name']}] Has 0 samples at path: {config['root']}. Please verify your data location!")
         return []
 
     g = torch.Generator()
@@ -97,12 +119,12 @@ def execute_dataset_pipeline(config, gpu_id):
 
         scheduler.step()
         avg_epoch_loss = epoch_loss / total_batches
-        log_to_file(f"[{config['name']}] Epoch [{epoch+1:03d}/{S1_EPOCHS}] | Avg Loss: {avg_epoch_loss:.4f}")
+        log_msg(f"[{config['name']}] Epoch [{epoch+1:03d}/{S1_EPOCHS}] | Avg Loss: {avg_epoch_loss:.4f}")
 
     train_time_s = time.perf_counter() - train_start
     
     encoder_state_dict = copy.deepcopy(model.encoder.state_dict())
-    stage1_save_path = os.path.join(CHECKPOINT_DIR, f"{config['name']}_SupCon_Stage1.pth")
+    stage1_save_path = os.path.join(dataset_dir, f"{config['name']}_SupCon_Stage1.pth")
     torch.save(model.state_dict(), stage1_save_path)
 
     del model, optimizer, loader, s1_dataset
@@ -114,7 +136,7 @@ def execute_dataset_pipeline(config, gpu_id):
     way = config["test_way"]
 
     for shot in K_SHOTS:
-        log_to_file(f"[{config['name']}] Starting Test-Time Adaptation loop ({shot}-Shot)...")
+        log_msg(f"[{config['name']}] Starting Test-Time Adaptation loop ({shot}-Shot)...")
             
         inference_start = time.perf_counter()
         episode_encoder = ResNet18Encoder().to(device)
@@ -183,7 +205,7 @@ def execute_dataset_pipeline(config, gpu_id):
                     ft_optim.step()
 
             if SAVE_STAGE_2_MODELS and ep % 100 == 0:
-                tta_dir = os.path.join(CHECKPOINT_DIR, f"{config['name']}_{shot}shot_TTA_Models")
+                tta_dir = os.path.join(dataset_dir, f"{shot}shot_TTA_Models")
                 os.makedirs(tta_dir, exist_ok=True)
                 torch.save({
                     "episode": ep,
@@ -217,6 +239,19 @@ def execute_dataset_pipeline(config, gpu_id):
             "final_acc": final_mean,
             "final_ci": final_ci,
         })
-        log_to_file(f"[RESULT] {config['name']} | {shot}-Shot: {final_mean:.4f}% +/- {final_ci:.4f}%")
+        log_msg(f"[RESULT] {config['name']} | {shot}-Shot: {final_mean:.4f}% +/- {final_ci:.4f}%")
+
+    # Save individual dataset summary table directly into dataset_dir/logs/
+    if dataset_results:
+        table = f"\n========================================================================================================================================================\n"
+        table += f"{'Dataset':<17}{'Tr-Way':<9}{'Ts-Way':<9}{'Shot':<8}{'Params(M)':<13}{'Inference(GMACs)':<21}{'Total Train(GMACs)':<23}{'Train(s)':<12}{'Infer(s)':<12}{'Mem(MB)':<10}{'Acc(%)':<10}{'CI(%)':<8}\n"
+        table += f"--------------------------------------------------------------------------------------------------------------------------------------------------------\n"
+        for r in dataset_results:
+            table += f"{r['dataset']:<17}{r['train_way']:<9}{r['test_way']:<9}{r['shot']:<8}{r['params_m']:<13.4f}{r['infer_gmacs']:<21.4f}{r['total_train_gmacs']:<23.4f}{r['train_time_s']:<12.4f}{r['inference_time_s']:<12.4f}{r['memory_mb']:<10.2f}{r['final_acc']:<10.4f}{r['final_ci']:<8.4f}\n"
+        table += f"========================================================================================================================================================\n"
+        
+        with open(table_file_path, "w", encoding="utf-8") as f:
+            f.write(table)
+        log_msg(f"Saved dataset summary table to {table_file_path}")
 
     return dataset_results

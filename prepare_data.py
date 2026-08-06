@@ -92,7 +92,7 @@ def download_fish4knowledge_raw():
 
 
 def prepare_croatian():
-    """Moves Croatian Fish Dataset from raw to processed using metadata.xml with SpeciesName_1, SpeciesName_2 format."""
+    """Moves Croatian Fish Dataset from raw to processed using metadata.xml with 'Species name_0' format."""
     if DOWNLOAD_DATA:
         download_croatian_raw()
 
@@ -116,11 +116,12 @@ def prepare_croatian():
 
     for elem in root.findall("folder"):
         folder_num = elem.attrib["folder_name"]
-        species_name = elem.attrib["species_name"].replace(" ", "_")
+        
+        # Preserve spaces in species_name to match original paper naming (e.g. 'Chromis chromis')
+        species_name = elem.attrib["species_name"]
 
-        # 1-indexed, unpadded format (e.g., 0 -> SpeciesName_1)
-        formatted_id = f"{int(folder_num) + 1}"
-        target_folder_name = f"{species_name}_{formatted_id}"
+        # 0-indexed format matching original paper dataset (e.g., 'Chromis chromis_0')
+        target_folder_name = f"{species_name}_{folder_num}"
 
         src_folder = os.path.join(croatian_raw, folder_num)
         dest_folder = os.path.join(PROCESSED_DIR, "croatian", target_folder_name)
