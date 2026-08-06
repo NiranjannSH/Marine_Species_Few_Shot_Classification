@@ -11,7 +11,7 @@ from config import (
     S1_LR, S1_WEIGHT_DECAY, S1_TEMPERATURE, K_SHOTS, N_QUERY, 
     ADAPT_STEPS, ADAPT_LR, ADAPT_BACKBONE, FINAL_TEST_EPISODES, SAVE_STAGE_2_MODELS
 )
-from datasets import train_transform, SupConDataset, FewShotDataset
+from dataset import train_transform, SupConDataset, FewShotDataset
 from models import SupConModel, ResNet18Encoder, CosineClassifier, SupConLoss
 from utils import (
     set_seed, seed_worker, log_to_file, compute_model_macs, 
