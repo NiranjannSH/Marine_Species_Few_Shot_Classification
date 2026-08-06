@@ -8,7 +8,7 @@ SEED = 42
 
 # Dynamic Portable Paths (relative to project root)
 PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
-DATA_DIR = os.path.join(PROJECT_ROOT, "data")
+DATA_DIR = os.path.join(PROJECT_ROOT, "data", "processed")
 CHECKPOINT_DIR = os.path.join(PROJECT_ROOT, "checkpoints")
 
 os.makedirs(CHECKPOINT_DIR, exist_ok=True)
@@ -17,19 +17,19 @@ os.makedirs(CHECKPOINT_DIR, exist_ok=True)
 DATASETS_CONFIG = [
     {
         "name": "Croatian",
-        "root": os.path.join(DATA_DIR, "Croatian"),
+        "root": os.path.join(DATA_DIR, "croatian"),
         "train_way": 3, "val_way": 2, "test_way": 3,
         "train_classes_cnt": 7, "val_classes_cnt": 2
     },
     {
         "name": "Fish4Knowledge",
-        "root": os.path.join(DATA_DIR, "F4K"),
+        "root": os.path.join(DATA_DIR, "fish4knowledge"),
         "train_way": 5, "val_way": 2, "test_way": 5,
         "train_classes_cnt": 16, "val_classes_cnt": 2
     },
     {
         "name": "Aqua20",
-        "root": os.path.join(DATA_DIR, "Aqua20"),
+        "root": os.path.join(DATA_DIR, "aqua20"),
         "train_way": 5, "val_way": 2, "test_way": 5,
         "train_classes_cnt": 12, "val_classes_cnt": 2
     }
