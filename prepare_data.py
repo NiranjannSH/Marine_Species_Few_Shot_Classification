@@ -1,6 +1,7 @@
 import os
 import shutil
 import tarfile
+import urllib.request
 import xml.etree.ElementTree as ET
 from datasets import load_dataset, concatenate_datasets
 
@@ -19,29 +20,29 @@ PROCESSED_DIR = "data/processed"
 # Fish4Knowledge Mapping
 # -------------------------------------------------------------------
 F4K_SPECIES_MAP = {
-    "fish_01": "01_Dascyllus_reticulatus",
-    "fish_02": "02_Plectroglyphidodon_dickii",
-    "fish_03": "03_Chromis_chrysura",
-    "fish_04": "04_Amphiprion_clarkii",
-    "fish_05": "05_Chaetodon_lunulatus",
-    "fish_06": "06_Chaetodon_trifascialis",
-    "fish_07": "07_Myripristis_kuntee",
-    "fish_08": "08_Acanthurus_nigrofuscus",
-    "fish_09": "09_Hemigymnus_fasciatus",
-    "fish_10": "10_Neoniphon_sammara",
-    "fish_11": "11_Abudefduf_vaigiensis",
-    "fish_12": "12_Canthigaster_valentini",
-    "fish_13": "13_Pomacentrus_moluccensis",
-    "fish_14": "14_Zebrasoma_scopas",
-    "fish_15": "15_Hemigymnus_melapterus",
-    "fish_16": "16_Lutjanus_fulvus",
-    "fish_17": "17_Scolopsis_bilineata",
-    "fish_18": "18_Scaridae",
-    "fish_19": "19_Pempheris_vanicolensis",
-    "fish_20": "20_Zanclus_cornutus",
-    "fish_21": "21_Neoglyphidodon_nigroris",
-    "fish_22": "22_Balistapus_undulatus",
-    "fish_23": "23_Siganus_fuscescens",
+    "01": "01_Dascyllus_reticulatus",
+    "02": "02_Plectroglyphidodon_dickii",
+    "03": "03_Chromis_chrysura",
+    "04": "04_Amphiprion_clarkii",
+    "05": "05_Chaetodon_lunulatus",
+    "06": "06_Chaetodon_trifascialis",
+    "07": "07_Myripristis_kuntee",
+    "08": "08_Acanthurus_nigrofuscus",
+    "09": "09_Hemigymnus_fasciatus",
+    "10": "10_Neoniphon_sammara",
+    "11": "11_Abudefduf_vaigiensis",
+    "12": "12_Canthigaster_valentini",
+    "13": "13_Pomacentrus_moluccensis",
+    "14": "14_Zebrasoma_scopas",
+    "15": "15_Hemigymnus_melapterus",
+    "16": "16_Lutjanus_fulvus",
+    "17": "17_Scolopsis_bilineata",
+    "18": "18_Scaridae",
+    "19": "19_Pempheris_vanicolensis",
+    "20": "20_Zanclus_cornutus",
+    "21": "21_Neoglyphidodon_nigroris",
+    "22": "22_Balistapus_undulatus",
+    "23": "23_Siganus_fuscescens",
 }
 
 
@@ -71,39 +72,34 @@ def download_croatian_raw():
 
 
 def download_fish4knowledge_raw():
-    """Downloads Fish4Knowledge dataset from Kaggle mirror via kagglehub into RAW_DIR."""
+    """Downloads the complete Fish4Knowledge dataset archive from Edinburgh's official server."""
     dest_dir = os.path.join(RAW_DIR, "fish4knowledge")
-    if os.path.exists(dest_dir) and len(os.listdir(dest_dir)) > 0:
-        print(f"[Skip Download] Fish4Knowledge raw data already exists at: {dest_dir}")
+    os.makedirs(dest_dir, exist_ok=True)
+
+    archive_url = "https://homepages.inf.ed.ac.uk/rbf/fish4knowledge/GROUNDTRUTH/RECOG/Archive/fishRecognition_GT.tar"
+    dest_file_path = os.path.join(dest_dir, "fishRecognition_GT.tar")
+
+    if os.path.exists(dest_file_path):
+        print(f"[Skip Download] Archive already exists at: {dest_file_path}")
         return
 
-    print("[Downloading] Fish4Knowledge Dataset via kagglehub...")
+    print("[Downloading] Fish4Knowledge complete archive (fishRecognition_GT.tar)...")
     try:
-        import kagglehub
-        download_path = kagglehub.dataset_download("nihiremath/fish4knowledge")
-        os.makedirs(dest_dir, exist_ok=True)
-
-        for item in os.listdir(download_path):
-            src_path = os.path.join(download_path, item)
-            dst_path = os.path.join(dest_dir, item)
-            if os.path.isdir(src_path):
-                shutil.copytree(src_path, dst_path, dirs_exist_ok=True)
-            else:
-                shutil.copy2(src_path, dst_path)
-        print(f"[Download Complete] Fish4Knowledge raw data saved to {dest_dir}")
+        urllib.request.urlretrieve(archive_url, dest_file_path)
+        print("[Download Complete] Saved fishRecognition_GT.tar")
     except Exception as e:
-        print(f"[Error Downloading Fish4Knowledge Dataset]: {e}")
+        print(f"[Error Downloading Fish4Knowledge Archive]: {e}")
 
 
 def prepare_croatian():
-    """Processes Croatian Fish Dataset using metadata.xml and formats folder names as SpeciesName_1, SpeciesName_2, etc."""
+    """Moves Croatian Fish Dataset from raw to processed using metadata.xml with SpeciesName_1, SpeciesName_2 format."""
     if DOWNLOAD_DATA:
         download_croatian_raw()
 
     croatian_raw = os.path.join(RAW_DIR, "croatian")
     xml_path = os.path.join(croatian_raw, "metadata.xml")
 
-    # Search subdirectories if metadata.xml is nested
+    # Search subdirectories if metadata.xml is nested inside Kaggle download structure
     if not os.path.exists(xml_path):
         for root_dir, _, files in os.walk(croatian_raw):
             if "metadata.xml" in files:
@@ -122,6 +118,7 @@ def prepare_croatian():
         folder_num = elem.attrib["folder_name"]
         species_name = elem.attrib["species_name"].replace(" ", "_")
 
+        # 1-indexed, unpadded format (e.g., 0 -> SpeciesName_1)
         formatted_id = f"{int(folder_num) + 1}"
         target_folder_name = f"{species_name}_{formatted_id}"
 
@@ -133,79 +130,71 @@ def prepare_croatian():
             for fname in os.listdir(src_folder):
                 src_file = os.path.join(src_folder, fname)
                 if os.path.isfile(src_file):
-                    shutil.copy2(src_file, os.path.join(dest_folder, fname))
-            print(f"[Croatian] Processed folder {folder_num} -> {target_folder_name}")
+                    shutil.move(src_file, os.path.join(dest_folder, fname))
+            print(f"[Croatian] Moved folder {folder_num} -> {target_folder_name}")
+
+    # Remove raw croatian folder after moving contents
+    raw_base_dir = os.path.join(RAW_DIR, "croatian")
+    if os.path.exists(raw_base_dir):
+        shutil.rmtree(raw_base_dir, ignore_errors=True)
 
 
 def prepare_fish4knowledge():
-    """Dynamically finds and moves Fish4Knowledge folders/files from data/raw to data/processed."""
+    """Extracts fishRecognition_GT.tar archive and dynamically sorts folders into data/processed/fish4knowledge."""
     if DOWNLOAD_DATA:
         download_fish4knowledge_raw()
 
     f4k_raw = os.path.join(RAW_DIR, "fish4knowledge")
+    tar_path = os.path.join(f4k_raw, "fishRecognition_GT.tar")
 
     if not os.path.exists(f4k_raw):
         print(f"[Skipped] Fish4Knowledge directory not found at: {f4k_raw}")
         return
 
-    # Map numerical prefix ("01", "02", ...) to standard target species name
-    prefix_map = {f"{i:02d}": formatted_name for i, formatted_name in enumerate(F4K_SPECIES_MAP.values(), start=1)}
+    # 1. Extract complete archive if present
+    if os.path.exists(tar_path):
+        print("[Fish4Knowledge] Extracting full dataset archive...")
+        with tarfile.open(tar_path, "r:*") as tar:
+            tar.extractall(path=f4k_raw)
+        os.remove(tar_path)
 
-    # Recursively search f4k_raw to handle nested download directories and case variations
+    # 2. Walk raw directory and map species folders/archives to processed target directories
     for root_dir, dirs, files in os.walk(f4k_raw, topdown=True):
+        for f in list(files):
+            if f.endswith(".tar"):
+                for pfx, target_name in F4K_SPECIES_MAP.items():
+                    if f"fish_{pfx}" in f.lower() or f.startswith(pfx):
+                        dest_folder = os.path.join(PROCESSED_DIR, "fish4knowledge", target_name)
+                        os.makedirs(dest_folder, exist_ok=True)
+                        tar_file_path = os.path.join(root_dir, f)
+                        with tarfile.open(tar_file_path, "r:*") as tar:
+                            tar.extractall(path=dest_folder)
+                        os.remove(tar_file_path)
+                        print(f"[Fish4Knowledge] Extracted {f} -> {target_name}")
+
         for d in list(dirs):
             d_lower = d.lower()
-            matched_prefix = None
+            matched_target = None
 
-            # 1. Check for numerical prefix match (e.g., '01_...', '02_...')
-            for pfx in prefix_map.keys():
-                if d_lower.startswith(f"{pfx}_") or d_lower == pfx:
-                    matched_prefix = pfx
+            for pfx, target_name in F4K_SPECIES_MAP.items():
+                if d_lower == f"fish_{pfx}" or d_lower == pfx or d_lower.startswith(f"{pfx}_"):
+                    matched_target = target_name
                     break
 
-            # 2. Check for legacy 'fish_01' matching
-            if not matched_prefix:
-                for key_id, target_name in F4K_SPECIES_MAP.items():
-                    if d_lower == key_id.lower():
-                        matched_prefix = target_name[:2]
-                        break
-
-            if matched_prefix:
-                target_name = prefix_map[matched_prefix]
+            if matched_target:
                 src_folder_path = os.path.join(root_dir, d)
-                dest_folder_path = os.path.join(PROCESSED_DIR, "fish4knowledge", target_name)
-
+                dest_folder_path = os.path.join(PROCESSED_DIR, "fish4knowledge", matched_target)
                 os.makedirs(dest_folder_path, exist_ok=True)
 
-                # Move contents into processed directory
                 for item in os.listdir(src_folder_path):
                     src_item = os.path.join(src_folder_path, item)
                     dest_item = os.path.join(dest_folder_path, item)
                     shutil.move(src_item, dest_item)
 
-                print(f"[Fish4Knowledge] Moved {d} -> {target_name}")
+                print(f"[Fish4Knowledge] Moved {d} -> {matched_target}")
                 dirs.remove(d)
 
-        # Process tar files if present
-        for f in list(files):
-            if f.endswith(".tar"):
-                f_lower = f.lower()
-                matched_prefix = None
-                for key_id, target_name in F4K_SPECIES_MAP.items():
-                    if f_lower.startswith(key_id.lower()):
-                        matched_prefix = target_name[:2]
-                        break
-                if matched_prefix:
-                    target_name = prefix_map[matched_prefix]
-                    tar_path = os.path.join(root_dir, f)
-                    dest_folder_path = os.path.join(PROCESSED_DIR, "fish4knowledge", target_name)
-                    os.makedirs(dest_folder_path, exist_ok=True)
-                    with tarfile.open(tar_path, "r:*") as tar:
-                        tar.extractall(path=dest_folder_path)
-                    os.remove(tar_path)
-                    print(f"[Fish4Knowledge] Extracted & removed archive {f} -> {target_name}")
-
-    # Remove raw directory after contents are moved
+    # Clean up empty raw directory
     if os.path.exists(f4k_raw):
         shutil.rmtree(f4k_raw, ignore_errors=True)
 
