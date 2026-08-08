@@ -8,9 +8,9 @@ This repository contains the implementation of a two-stage framework combining *
 
 | Dataset | Source / Download Link | Description | Processing Note |
 | :--- | :--- | :--- | :--- |
-| **Croatian** | [Kaggle Dataset](https://www.kaggle.com/datasets/ashfaqsyed/croatian-fish-dataset) | Underwater fish species from the Adriatic Sea. | Auto-downloaded or pulled from `data/raw/croatian` |
-| **Fish4Knowledge (F4K)** | [University of Edinburgh Source](https://homepages.inf.ed.ac.uk/rbf/Fish4Knowledge/GROUNDTRUTH/RECOG/) | Verified underwater fish images from live video feeds in Taiwan. | Auto-downloaded or pulled from `data/raw/fish4knowledge` |
-| **Aqua20** | [AQUA20 GitHub Repository](https://github.com/taufiktrf/AQUA20) | Aquatic species benchmark for complex underwater environments. | Automatically fetched via Hugging Face (`taufiktrf/AQUA20`) |
+| **Croatian** | [Kaggle Dataset](https://www.kaggle.com/datasets/ashfaqsyed/croatian-fish-dataset) | Underwater fish species from the Adriatic Sea. | Auto-downloaded to `data/raw` and Moved to `data/processed`|
+| **Fish4Knowledge (F4K)** | [University of Edinburgh Source](https://homepages.inf.ed.ac.uk/rbf/Fish4Knowledge/GROUNDTRUTH/RECOG/) | Verified underwater fish images from live video feeds in Taiwan. |  Auto-downloaded to `data/raw/` and Moved to `data/processed`|
+| **Aqua20** | [AQUA20 GitHub Repository](https://github.com/taufiktrf/AQUA20) | Aquatic species benchmark for complex underwater environments. |  Auto-downloaded to `data/raw/` and Moved to `data/processed`|
 
 ---
 
