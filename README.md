@@ -42,8 +42,8 @@ fish-fewshot-supcon/
 ### Step 1: Install Dependencies
 Clone the repository and install all required python dependencies:
 ```bash
-git clone [https://github.com/your-username/fish-fewshot-supcon.git](https://github.com/your-username/fish-fewshot-supcon.git)
-cd fish-fewshot-supcon
+git clone https://github.com/NiranjannSH/Marine_Species_Few_Shot_Classification.git
+cd Marine_Species_Few_Shot_Classification
 pip install -r requirements.txt
 ```
 
