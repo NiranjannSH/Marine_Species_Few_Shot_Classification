@@ -9,11 +9,12 @@ SEED = 42
 # Dynamic Portable Paths (relative to project root)
 PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.path.join(PROJECT_ROOT, "data", "processed")
+EPISODE_DIR = os.path.join(PROJECT_ROOT, "data", "episodes")
 CHECKPOINT_DIR = os.path.join(PROJECT_ROOT, "checkpoints")
 
 os.makedirs(CHECKPOINT_DIR, exist_ok=True)
 
-# Datasets Configuration
+# Datasets Configuration (class split: sorted folders shuffled with random.Random(SEED))
 DATASETS_CONFIG = [
     {
         "name": "Croatian",
@@ -39,18 +40,22 @@ DATASETS_CONFIG = [
 IMAGE_SIZE = 84
 IMAGE_EXTS = (".jpg", ".jpeg", ".png", ".bmp", ".webp")
 
-# Stage 1: SupCon Pre-training
+# Stage 1: SupCon Pre-training (selected on the validation classes)
 S1_BATCH_SIZE = 128
 S1_EPOCHS = 100
-S1_LR = 3e-4
+S1_LR = 1e-4
 S1_WEIGHT_DECAY = 1e-4
-S1_TEMPERATURE = 0.04
+S1_TEMPERATURE = 0.15
 
-# Stage 2: Test-Time Adaptation
+# Episodes (fixed, leak-free; built once by make_episodes.py)
 K_SHOTS = [1, 5]
 N_QUERY = 5
-ADAPT_STEPS = 25
-ADAPT_LR = 0.1
-ADAPT_BACKBONE = True
+VAL_EPISODES = 600
 FINAL_TEST_EPISODES = 600
-SAVE_STAGE_2_MODELS = False
+
+# Stage 2: Test-Time Adaptation (selected on the validation classes)
+ADAPT_STEPS = 17
+ADAPT_LR = 0.05                 # classifier learning rate
+BACKBONE_LR_FACTOR = 0.1        # encoder learning rate = 0.1 x ADAPT_LR = 0.005
+ADAPT_MOMENTUM = 0.9
+STEP_SETTINGS = [0, ADAPT_STEPS]   # every test run reports without (0) and with adaptation

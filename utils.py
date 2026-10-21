@@ -9,11 +9,13 @@ import scipy.stats
 import torch
 import torch.nn as nn
 from thop import profile
-from config import CHECKPOINT_DIR
+from config import CHECKPOINT_DIR, N_QUERY
 
 timestamp = time.strftime("%Y-%m-%d_%H-%M-%S")
 LOG_FILE_PATH = os.path.join(CHECKPOINT_DIR, f"Proposed_parallel_execution_log_{timestamp}.txt")
 TABLE_FILE_PATH = os.path.join(CHECKPOINT_DIR, f"Proposed_final_paper_table_{timestamp}.txt")
+CSV_FILE_PATH = os.path.join(CHECKPOINT_DIR, f"Proposed_final_paper_table_{timestamp}.csv")
+EPISODE_CSV_PATH = os.path.join(CHECKPOINT_DIR, f"Proposed_episode_accuracies_{timestamp}.csv")
 
 def log_to_file(message):
     current_ts = time.strftime("%Y-%m-%d %H:%M:%S")
@@ -44,6 +46,7 @@ def seed_worker(worker_id):
     random.seed(worker_seed)
 
 def freeze_batchnorm_stats(module):
+    """Keeps the BatchNorm running statistics fixed (eval mode); the BatchNorm weights are still updated."""
     if isinstance(module, nn.modules.batchnorm._BatchNorm):
         module.eval()
 
@@ -58,16 +61,25 @@ def mean_confidence_interval(data, confidence=0.95):
 def compute_model_macs(model, input_tensor):
     was_training = model.training
     model.eval()
-    
+
     thop_logger = logging.getLogger("thop")
     original_level = thop_logger.getEffectiveLevel()
     thop_logger.setLevel(logging.ERROR)
-    
+
     with torch.no_grad():
         macs, _ = profile(copy.deepcopy(model), inputs=(input_tensor,), verbose=False)
-        
+
     thop_logger.setLevel(original_level)
     if was_training:
         model.train()
-        
-    return macs
+
+    return float(macs)
+
+def episode_gmacs(encoder_macs, way, shot, steps):
+    """GMACs of one episode: support encoding + steps x (forward + backward = 3 x forward) on the
+    support set + query classification. steps = 0 gives the cost without adaptation."""
+    classifier_macs = 512 * way
+    support, query = way * shot, way * N_QUERY
+    return ((encoder_macs + 512) * support
+            + (encoder_macs + classifier_macs) * support * 3.0 * steps
+            + (encoder_macs + classifier_macs) * query) / 1e9

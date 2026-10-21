@@ -17,7 +17,7 @@ RAW_DIR = "data/raw"
 PROCESSED_DIR = "data/processed"
 
 # -------------------------------------------------------------------
-# Fish4Knowledge Mapping
+# Fish4Knowledge Mapping (correct species spellings, e.g. 21 = Neoglyphidodon nigroris)
 # -------------------------------------------------------------------
 F4K_SPECIES_MAP = {
     "01": "01_Dascyllus_reticulatus",
@@ -43,6 +43,16 @@ F4K_SPECIES_MAP = {
     "21": "21_Neoglyphidodon_nigroris",
     "22": "22_Balistapus_undulatus",
     "23": "23_Siganus_fuscescens",
+}
+
+# Misspelled or truncated folder names found in some copies of the datasets -> correct names.
+# The numeric prefixes (Fish4Knowledge) and the alphabetical order (Aqua20) are unchanged,
+# so the seed-42 class split is the same with either spelling.
+F4K_NAME_FIXES = {
+    "21_neoglyphidon_nigroris": "21_Neoglyphidodon_nigroris",
+}
+AQUA20_NAME_FIXES = {
+    "seaCucumbe": "seaCucumber",
 }
 
 
@@ -199,6 +209,23 @@ def prepare_fish4knowledge():
     if os.path.exists(f4k_raw):
         shutil.rmtree(f4k_raw, ignore_errors=True)
 
+    rename_folders(os.path.join(PROCESSED_DIR, "fish4knowledge"), F4K_NAME_FIXES)
+
+
+def rename_folders(dataset_dir, fixes):
+    """Renames class folders with a known misspelling to the correct species name."""
+    if not os.path.isdir(dataset_dir):
+        return
+    for wrong, correct in fixes.items():
+        src, dst = os.path.join(dataset_dir, wrong), os.path.join(dataset_dir, correct)
+        if not os.path.isdir(src):
+            continue
+        os.makedirs(dst, exist_ok=True)
+        for item in os.listdir(src):
+            shutil.move(os.path.join(src, item), os.path.join(dst, item))
+        os.rmdir(src)
+        print(f"[Name fix] {wrong} -> {correct}")
+
 
 def prepare_aqua20():
     """Downloads taufiktrf/AQUA20 via Hugging Face, merges train/test splits,
@@ -228,7 +255,7 @@ def prepare_aqua20():
             skipped_count += 1
             continue
 
-        species_name = raw_class_name.replace(" ", "_")
+        species_name = AQUA20_NAME_FIXES.get(raw_class_name, raw_class_name).replace(" ", "_")
         dest_folder = os.path.join(PROCESSED_DIR, "aqua20", species_name)
         os.makedirs(dest_folder, exist_ok=True)
 
@@ -237,6 +264,7 @@ def prepare_aqua20():
         saved_count += 1
 
     print(f"[Aqua20] Completed processing AQUA20 (Saved {saved_count} images, skipped {skipped_count} 'Diver' images).")
+    rename_folders(os.path.join(PROCESSED_DIR, "aqua20"), AQUA20_NAME_FIXES)
 
 
 if __name__ == "__main__":

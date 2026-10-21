@@ -4,7 +4,7 @@ from PIL import Image
 import torch
 from torch.utils.data import Dataset
 import torchvision.transforms as transforms
-from config import IMAGE_SIZE, IMAGE_EXTS, SEED
+from config import IMAGE_SIZE, IMAGE_EXTS, SEED, EPISODE_DIR
 
 class TwoCropTransform:
     def __init__(self, base):
@@ -56,57 +56,18 @@ class SupConDataset(Dataset):
             img = self.transform(img)
         return img, label
 
-class FewShotDataset:
-    def __init__(self, config, split_seed=SEED, sampler_seed=SEED):
-        self.config = config
-        root = config["root"]
+def class_split(config, seed=SEED):
+    """Sorted class folders shuffled with random.Random(seed) -> (base, validation, novel) classes."""
+    root = config["root"]
+    classes = sorted(name for name in os.listdir(root) if os.path.isdir(os.path.join(root, name)))
+    random.Random(seed).shuffle(classes)
+    train_cnt, val_cnt = config["train_classes_cnt"], config["val_classes_cnt"]
+    return classes[:train_cnt], classes[train_cnt:train_cnt + val_cnt], classes[train_cnt + val_cnt:]
 
-        classes = sorted([name for name in os.listdir(root) if os.path.isdir(os.path.join(root, name))])
-        
-        split_rng = random.Random(split_seed)
-        split_rng.shuffle(classes)
-        
-        self.rng = random.Random(sampler_seed)
+def episode_path(dataset_name, split, shot):
+    return os.path.join(EPISODE_DIR, f"{dataset_name}_{split}_{shot}shot_episodes.pt")
 
-        train_cnt = config["train_classes_cnt"]
-        val_cnt = config["val_classes_cnt"]
-
-        self.train_classes = classes[:train_cnt]
-        self.val_classes = classes[train_cnt: train_cnt + val_cnt]
-        self.test_classes = classes[train_cnt + val_cnt:]
-
-        self.data = {}
-        for class_name in classes:
-            class_dir = os.path.join(root, class_name)
-            img_paths = sorted(os.path.join(class_dir, f) for f in os.listdir(class_dir) if f.lower().endswith(IMAGE_EXTS))
-
-            self.data[class_name] = []
-            for path in img_paths:
-                try:
-                    with Image.open(path) as img:
-                        tensor_img = eval_transform(img.convert("RGB"))
-                    self.data[class_name].append(tensor_img)
-                except Exception:
-                    continue
-
-    def _sample_images(self, images, count):
-        if len(images) >= count:
-            return self.rng.sample(images, count)
-        return self.rng.choices(images, k=count)
-
-    def sample_episode(self, split, shot, query_per_class):
-        pool = self.test_classes if split == "test" else self.val_classes
-        way = self.config["test_way"] if split == "test" else self.config["val_way"]
-
-        selected_classes = self.rng.sample(pool, way)
-        support, query, labels = [], [], []
-
-        for label, class_name in enumerate(selected_classes):
-            chosen = self._sample_images(self.data[class_name], shot + query_per_class)
-            for img_tensor in chosen[:shot]:
-                support.append(img_tensor)
-            for img_tensor in chosen[shot:]:
-                query.append(img_tensor)
-                labels.append(label)
-
-        return torch.stack(support), torch.stack(query), torch.tensor(labels, dtype=torch.long)
+def load_episodes(path):
+    """Fixed episodes written by make_episodes.py -> list of (support, query, labels)."""
+    episodes = torch.load(path, map_location="cpu", weights_only=False)
+    return [(e["support"].float(), e["query"].float(), e["labels"].long()) for e in episodes]
